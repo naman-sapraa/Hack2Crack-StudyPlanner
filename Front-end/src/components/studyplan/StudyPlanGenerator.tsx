@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -23,6 +22,8 @@ import {
 } from "@/components/ui/form";
 import { CheckCircle2, Brain, Clock, Target } from 'lucide-react';
 import Card from '../common/Card';
+
+const API_BASE_URL = 'http://localhost:5000'; // Update with your backend URL
 
 type FormValues = {
   subjects: string[];
@@ -58,13 +59,41 @@ const StudyPlanGenerator = () => {
     }
   });
   
-  const onSubmit = (data: FormValues) => {
-    toast({
-      title: "Study Plan Generated",
-      description: "Your personalized study plan has been created based on your preferences.",
-    });
-    setGeneratedPlan(true);
-    console.log(data);
+  const onSubmit = async (data: FormValues) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/generate-study-schedule`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to generate study plan');
+      }
+  
+      const studyPlan = await response.json();
+      
+      // Store the study plan in localStorage for persistence
+      localStorage.setItem('studyPlan', JSON.stringify(studyPlan));
+      
+      toast({
+        title: "Study Plan Generated",
+        description: "Your personalized study plan has been created based on your preferences.",
+      });
+      
+      setGeneratedPlan(true);
+      
+      // Optionally, you can redirect to the calendar view
+      window.location.href = '/study-plan';
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to generate study plan. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

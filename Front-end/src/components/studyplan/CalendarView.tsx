@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Card from '../common/Card';
 import { cn } from '@/lib/utils';
@@ -38,10 +37,14 @@ const CalendarView = ({ className, studyPlan }: CalendarViewProps) => {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   
-  // Generate calendar days for current month
+  // Update the generateCalendarDays function
   const generateCalendarDays = (): CalendarDay[] => {
     const days: CalendarDay[] = [];
     const today = new Date();
+    
+    // Get stored study plan
+    const storedPlan = localStorage.getItem('studyPlan');
+    const studyPlan = storedPlan ? JSON.parse(storedPlan) : null;
     
     // First day of the month
     const firstDay = new Date(currentYear, currentMonth, 1);
@@ -61,72 +64,30 @@ const CalendarView = ({ className, studyPlan }: CalendarViewProps) => {
       });
     }
     
-    // Days from current month - PCMB focused study sessions
-    const pcmbSubjects = ["Physics", "Chemistry", "Mathematics", "Biology"];
-    const difficulties = ["easy", "medium", "hard"] as const;
-    
+    // Days from current month
     for (let i = 1; i <= lastDay; i++) {
+      const currentDate = new Date(currentYear, currentMonth, i);
+      const dateString = currentDate.toISOString().split('T')[0];
+      
       const isToday = i === today.getDate() && 
                       currentMonth === today.getMonth() && 
                       currentYear === today.getFullYear();
       
-      // Generate PCMB study sessions
-      const events: CalendarEvent[] = [];
-      
-      // Create dynamic study sessions based on day patterns
-      if (i % 2 === 0) { // Even days
-        events.push({
-          id: `event-${i}-1`,
-          title: 'Physics',
-          time: '9:00 AM',
-          duration: '90 min',
-          difficulty: 'medium',
-          examType: 'JEE Mains'
-        });
-        
-        events.push({
-          id: `event-${i}-2`,
-          title: 'Mathematics',
-          time: '11:30 AM',
-          duration: '90 min',
-          difficulty: 'hard',
-          examType: 'JEE Mains'
-        });
-      }
-      
-      if (i % 3 === 0) { // Every third day
-        events.push({
-          id: `event-${i}-3`,
-          title: 'Chemistry',
-          time: '2:00 PM',
-          duration: '60 min',
-          difficulty: 'medium',
-          examType: 'JEE Mains'
-        });
-      }
-      
-      if (i % 4 === 0) { // Every fourth day
-        events.push({
-          id: `event-${i}-4`,
-          title: 'Biology',
-          time: '4:30 PM',
-          duration: '75 min',
-          difficulty: 'easy',
-          examType: 'NEET',
-          isComplete: i < today.getDate() && currentMonth === today.getMonth()
-        });
-      }
+      // Get events for this day from study plan
+      const daySchedule = studyPlan?.schedule?.find(
+        (day: any) => day.date === dateString
+      );
       
       days.push({
         date: i,
         isCurrentMonth: true,
         isToday,
-        events
+        events: daySchedule?.events || []
       });
     }
     
-    // Days from next month to fill the calendar
-    const remainingDays = 42 - days.length; // 6 rows of 7 days
+    // Days from next month
+    const remainingDays = 42 - days.length;
     for (let i = 1; i <= remainingDays; i++) {
       days.push({
         date: i,
@@ -169,7 +130,7 @@ const CalendarView = ({ className, studyPlan }: CalendarViewProps) => {
     <div className={cn("space-y-6", className)}>
       <Card className="p-0 overflow-hidden">
         <div className="p-4 bg-primary/5 border-b flex items-center justify-between">
-          <h3 className="font-medium">PCMB Study Calendar</h3>
+          <h3 className="font-medium">Study Calendar</h3>
           <div className="flex items-center space-x-1">
             <button 
               onClick={() => navigateMonth('prev')}
@@ -246,7 +207,7 @@ const CalendarView = ({ className, studyPlan }: CalendarViewProps) => {
       {selectedDay && selectedDay.events.length > 0 && (
         <Card className="space-y-4 animate-fade-in">
           <h3 className="font-medium">
-            PCMB Study Sessions for {monthNames[currentMonth]} {selectedDay.date}
+            Study Sessions for {monthNames[currentMonth]} {selectedDay.date}
           </h3>
           
           <div className="space-y-3">

@@ -7,6 +7,8 @@ from flask_bcrypt import Bcrypt
 from flask_pymongo import PyMongo
 import json
 from flask_cors import CORS
+from datetime import datetime, timedelta
+import random
 
 # Config
 app = Flask(__name__)
@@ -255,6 +257,92 @@ def generate_quiz():
             "subjects": [s.get("name") for s in subjects],
             "total_questions": len(all_questions),
             "difficulty": difficulty
+        }
+    })
+
+@app.route('/generate-study-schedule', methods=['POST'])
+def generate_study_schedule():
+    data = request.json
+    
+    # Extract data from request
+    subjects = data.get('subjects', [])
+    weak_subjects = data.get('weakSubjects', [])
+    hours_per_day = data.get('hoursPerDay', 4)
+    target_score = data.get('targetScore', 80)
+    exam_date = datetime.strptime(data.get('examDate', ''), '%Y-%m-%d')
+    exam_type = data.get('examType', 'JEE Mains')
+    
+    today = datetime.now()
+    days_until_exam = (exam_date - today).days
+    
+    # Generate schedule
+    schedule = []
+    current_date = today
+    
+    while current_date <= exam_date:
+        # Skip generating past dates
+        if current_date < today:
+            current_date += timedelta(days=1)
+            continue
+            
+        day_schedule = []
+        remaining_hours = hours_per_day
+        
+        # Prioritize weak subjects
+        if weak_subjects and current_date.weekday() < 5:  # Weekdays
+            weak_subject = random.choice(weak_subjects)
+            day_schedule.append({
+                "id": f"event-{current_date.strftime('%Y%m%d')}-1",
+                "title": weak_subject,
+                "time": "09:00 AM",
+                "duration": "90 min",
+                "difficulty": "hard",
+                "examType": exam_type,
+                "isComplete": False
+            })
+            remaining_hours -= 1.5
+        
+        # Distribute remaining hours among other subjects
+        available_subjects = [s for s in subjects if s not in weak_subjects]
+        time_slots = ["11:00 AM", "02:00 PM", "04:00 PM", "06:00 PM"]
+        durations = ["60 min", "90 min", "45 min"]
+        difficulties = ["easy", "medium", "hard"]
+        
+        while remaining_hours > 0 and available_subjects and time_slots:
+            subject = random.choice(available_subjects)
+            time_slot = time_slots.pop(0)
+            duration = random.choice(durations)
+            difficulty = random.choice(difficulties)
+            
+            duration_hours = float(duration.split()[0]) / 60
+            if duration_hours <= remaining_hours:
+                day_schedule.append({
+                    "id": f"event-{current_date.strftime('%Y%m%d')}-{len(day_schedule)+1}",
+                    "title": subject,
+                    "time": time_slot,
+                    "duration": duration,
+                    "difficulty": difficulty,
+                    "examType": exam_type,
+                    "isComplete": False
+                })
+                remaining_hours -= duration_hours
+        
+        if day_schedule:
+            schedule.append({
+                "date": current_date.strftime('%Y-%m-%d'),
+                "events": day_schedule
+            })
+        
+        current_date += timedelta(days=1)
+    
+    return jsonify({
+        "schedule": schedule,
+        "metadata": {
+            "examType": exam_type,
+            "daysUntilExam": days_until_exam,
+            "totalStudyHours": hours_per_day * days_until_exam,
+            "subjects": subjects,
+            "weakSubjects": weak_subjects
         }
     })
 
