@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -9,15 +8,16 @@ interface CardProps {
   glass?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  onClick?: () => void;
 }
-
 const Card = ({ 
   children, 
   className, 
   hoverable = false, 
   glass = false,
   onMouseEnter,
-  onMouseLeave
+  onMouseLeave,
+  onClick
 }: CardProps) => {
   return (
     <div
@@ -29,6 +29,7 @@ const Card = ({
       )}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onClick={onClick}
     >
       {children}
     </div>

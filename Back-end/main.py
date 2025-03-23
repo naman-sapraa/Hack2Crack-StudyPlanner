@@ -147,61 +147,116 @@ def generate_response():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-# Quiz Generator API
 @app.route("/generate-quiz", methods=["POST"])
 def generate_quiz():
     data = request.json
-    exam_type = data.get("exam_type")
-    subject = data.get("subject")
-    num_questions = data.get("num_questions", 5)
+    exam_type = data.get("exam_type", "MIXED")  # Default to MIXED if not specified
+    subjects = data.get("subjects", [])
     difficulty = data.get("difficulty", "Mixed")
+    test_name = data.get("test_name", "Custom Test")
 
+    # Updated exam subjects mapping to be more flexible
     EXAM_SUBJECTS = {
-    "JEE": ["Physics", "Chemistry", "Mathematics"],
-    "NEET": ["Physics", "Chemistry", "Biology"],
-    "MHT-CET": ["Physics", "Chemistry", "Mathematics", "Biology"]
+        "JEE": ["Physics", "Chemistry", "Mathematics"],
+        "NEET": ["Physics", "Chemistry", "Biology"],
+        "MHT-CET": ["Physics", "Chemistry", "Mathematics", "Biology"],
+        "MIXED": ["Physics", "Chemistry", "Mathematics", "Biology"]  # Allow all subjects
     }
     
-    if not exam_type or not subject or subject not in EXAM_SUBJECTS.get(exam_type, []):
-        return jsonify({"error": "Invalid exam type or subject"}), 400
+    if not subjects:
+        return jsonify({"error": "No subjects selected"}), 400
     
-    prompt = f"""
-    Generate {num_questions} multiple-choice questions (MCQs) for {exam_type} entrance exam on the subject of {subject} with {difficulty} difficulty level.
-    
-    Requirements:
-    - Questions must be at {exam_type} entrance exam level.
-    - Each question should have exactly 4 options (A, B, C, D) with one correct answer.
-    - Include the correct answer and a brief explanation.
-    - Format should be a valid JSON array.
-    
-    Format:
-    [
-        {{
-            "question": "Sample question?",
-            "options": {{ "A": "Option 1", "B": "Option 2", "C": "Option 3", "D": "Option 4" }},
-            "correct_answer": "A",
-            "explanation": "Brief explanation",
-            "topic": "Specific topic",
-            "difficulty": "Easy/Medium/Hard"
-        }}
-    ]
-    
-    Return only the JSON array.
-    """
-    
-    try:
-        response = model.generate_content(prompt)
-        response_text = response.text
-        
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0].strip()
-        
-        questions = json.loads(response_text)
-        
-        return jsonify({"quiz": questions})
-    except Exception as e:
-        return jsonify({"error": str(e)})
+    # Automatically determine exam type based on subjects if not explicitly set
+    if exam_type == "MIXED":
+        if "Biology" in [s.get("name") for s in subjects]:
+            if "Mathematics" in [s.get("name") for s in subjects]:
+                exam_type = "MHT-CET"
+            else:
+                exam_type = "NEET"
+        else:
+            exam_type = "JEE"
 
+    # Validate subjects against the flexible subject list
+    valid_subjects = EXAM_SUBJECTS["MIXED"]  # Use the complete subject list for validation
+    for subject_data in subjects:
+        subject_name = subject_data.get("name")
+        if subject_name not in valid_subjects:
+            return jsonify({"error": f"Invalid subject {subject_name}"}), 400
+
+    all_questions = []
+    
+    # Generate questions for each subject
+    for subject_data in subjects:
+        subject_name = subject_data.get("name")
+        question_count = subject_data.get("question_count", 5)
+        topics = subject_data.get("topics", [])
+        
+        # Adjust difficulty and context based on subject and exam type
+        subject_context = ""
+        if subject_name == "Biology" and exam_type in ["NEET", "MHT-CET"]:
+            subject_context = "with focus on NEET/MHT-CET biology concepts"
+        elif exam_type == "JEE":
+            subject_context = "with focus on JEE level concepts"
+        
+        topics_str = f"focusing on these topics: {', '.join(topics)}" if topics else ""
+        
+        prompt = f"""
+        Generate {question_count} multiple-choice questions (MCQs) for {exam_type} entrance exam on the subject of {subject_name} 
+        with {difficulty} difficulty level {topics_str} {subject_context}.
+        
+        Requirements:
+            1. Questions must be strictly at {exam_type} entrance exam level for {subject_name}
+            2. Questions should test conceptual understanding and application
+            3. Each question must have exactly 4 options (A, B, C, D)
+            4. One and only one option must be correct
+            5. Include the correct answer and a brief explanation for each question
+            6. Questions should be diverse and cover different topics within {subject_name}
+            7. All questions must be original and accurate
+            8. If {difficulty} is "Mixed", create a mix of easy, medium, and hard questions
+            
+        Format:
+        [
+            {{
+                "question": "Sample question?",
+                "options": {{ "A": "Option 1", "B": "Option 2", "C": "Option 3", "D": "Option 4" }},
+                "correct_answer": "A",
+                "explanation": "Brief explanation",
+                "topic": "Specific topic",
+                "subject": "{subject_name}",
+                "difficulty": "Easy/Medium/Hard"
+            }}
+        ]
+        
+        Return only the JSON array.
+        """
+        
+        try:
+            response = model.generate_content(prompt)
+            response_text = response.text
+            
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            
+            subject_questions = json.loads(response_text)
+            all_questions.extend(subject_questions)
+            
+        except Exception as e:
+            return jsonify({"error": f"Error generating questions for {subject_name}: {str(e)}"}), 500
+
+    # Shuffle questions to mix subjects
+    import random
+    random.shuffle(all_questions)
+    
+    return jsonify({
+        "quiz": all_questions,
+        "metadata": {
+            "test_name": test_name,
+            "exam_type": exam_type,
+            "subjects": [s.get("name") for s in subjects],
+            "total_questions": len(all_questions),
+            "difficulty": difficulty
+        }
+    })
 
 # Helper Functions
 def fetch_info(query):
